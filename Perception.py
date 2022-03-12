@@ -1,3 +1,4 @@
+from turtle import position
 import gym
 import os
 import time
@@ -26,28 +27,30 @@ class Perception:
         rows = 13
         cols = 25
         self.arena = [ [ 0 for j in range(cols) ] for i in range(rows) ]
-        self.antidodes = [(0, 0), (0, 0), (0, 0)]  # Goblin, sandman, electro
-        self.enemy = [(0, 0), (0, 0), (0, 0)]  # Goblin, sandman, electro
+        self.goblin = [(0, 0), (0, 0)]
+        self.sandman = [(0, 0), (0, 0)]
+        self.electro = [(0, 0), (0, 0)]
+        self.antidodes = []
+        self.spiderman = []
 
         # params
-        self.y_pad = 60
-        self.x_pad = 24
-        self.hex_height = 45.5
-        self.hex_width = 26
+        self.y_pad = 44
+        self.x_pad = 12
+        self.hex_height = 39
+        self.hex_width = 22.5
 
     def scan_arena(self):
         '''
         Decription of Arena:
         0 -> Empty Cell
-        1 -> Spiderman
-        2 -> Goblin
+        1 -> Whit Cell
+        4 -> Goblin
         3 -> Sandman
-        4 -> Electro
+        2 -> Electro
         5 -> Antidode
-        6 -> Blocked Cell
+        6 -> Spiderman
         '''
         img = self.env.camera_feed()
-        # img = cv2.imread("sample_arena_img.png")
 
         # Goblin
         out = filter(img, Colors.GREEN.value)
@@ -55,7 +58,7 @@ class Perception:
         positions = self.contours_to_location(contours)
         for position in positions:
             row, col = position
-            self.arena[row][col] = 2
+            self.arena[row][col] = 4
 
         # Sandman
         out = filter(img, Colors.PURPLE.value)
@@ -71,15 +74,7 @@ class Perception:
         positions = self.contours_to_location(contours)
         for position in positions:
             row, col = position
-            self.arena[row][col] = 4
-
-        # Antidode
-        out = filter(img, Colors.PINK.value)
-        contours, _ = cv2.findContours(out, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        positions = self.contours_to_location(contours)
-        for position in positions:
-            row, col = position
-            self.arena[row][col] = 5
+            self.arena[row][col] = 2
 
         # Blocked Cell
         out = filter(img, Colors.WHITE.value)
@@ -87,7 +82,15 @@ class Perception:
         positions = self.contours_to_location(contours)
         for position in positions:
             row, col = position
-            self.arena[row][col] = 6
+            self.arena[row][col] = 1
+
+        # Antidode
+        out = filter(img, Colors.PINK.value)
+        contours, _ = cv2.findContours(out, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        positions = self.contours_to_location(contours)
+        for position in positions:
+            row, col = position
+            self.antidodes.append((row, col))
 
         # Spiderman
         out = filter(img, Colors.RED.value)
@@ -95,7 +98,7 @@ class Perception:
         positions = self.contours_to_location(contours)
         for position in positions:
             row, col = position
-            self.arena[row][col] = 1
+            self.spiderman.append((row, col))
 
         # Enemies position
         out = filter(img, Colors.VILLAN.value)
@@ -103,29 +106,33 @@ class Perception:
         for contour in contours:
             approx = cv2.approxPolyDP(contour, 0.02 * cv2.arcLength(contour, True), True).tolist()
             if len(approx) == 4:
-                self.enemy[0] = self.contours_to_location([contour])[0]
+                self.goblin[0] = self.contours_to_location([contour])[0]
             elif len(approx) == 3:
-                self.enemy[1] = self.contours_to_location([contour])[0]
+                self.sandman[0] = self.contours_to_location([contour])[0]
             else:
-                self.enemy[2] = self.contours_to_location([contour])[0]
+                self.electro[0] = self.contours_to_location([contour])[0]
+            
 
+    def revel_antidodes(self):
+        '''
+        After Moving to all the 3-Spidermans this function will store the location of enimies antidodes
+        '''
         # Antidodes Position
-        # out = self.filter(img, Colors.PINK.value)
-        # cv2.imshow("antidodes", out)
-        # contours, _ = cv2.findContours(out, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-        # for contour in contours:
-        #     approx = cv2.approxPolyDP(contour, 0.02 * cv2.arcLength(contour, True), True).tolist()
-        #     if len(approx) == 4:
-        #         self.antidodes[0] = self.contours_to_location([contour])[0]
-        #     elif len(approx) == 3:
-        #         self.antidodes[1] = self.contours_to_location([contour])[0]
-        #     else:
-        #         self.antidodes[2] = self.contours_to_location([contour])[0]
 
-        print("Arena : ")
-        print_arena(self.arena)
-        print(f"Antidodes location : {self.antidodes}")
-        print(f"Enemies location : {self.enemy}")
+        img = self.env.camera_feed()
+
+        out = filter(img, Colors.PINK.value)
+        cv2.imshow("antidode", out)
+        contours, _ = cv2.findContours(out, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+        for contour in contours:
+            approx = cv2.approxPolyDP(contour, 0.025 * cv2.arcLength(contour, True), True).tolist()
+            if len(approx) == 4:
+                self.goblin[1] = self.contours_to_location([contour])[0]
+            elif len(approx) == 8: # error
+                self.sandman[1] = self.contours_to_location([contour])[0]
+            else:
+                self.electro[1] = self.contours_to_location([contour])[0]
+
 
     def get_location(self):
         '''
@@ -161,9 +168,13 @@ class Perception:
 if __name__ == "__main__":
     parent_path = os.path.dirname(os.getcwd())
     os.chdir(parent_path)
-    perception = Perception()
+    env = gym.make("pixelate_arena-v0")
+    perception = Perception(env)
     perception.scan_arena()
-    location = perception.get_location()
-    print(f"Robot location : {location}")
+    env.unlock_antidotes()
+    perception.revel_antidodes()
+    print(perception.arena)
+    print(perception.spiderman, perception.goblin, perception.sandman, perception.electro)
+
     cv2.waitKey(0)
     
