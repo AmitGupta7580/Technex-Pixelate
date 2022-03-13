@@ -6,8 +6,9 @@ import cv2
 import enum
 import numpy as np
 import pixelate_arena
+import cv2.aruco as aruco
 
-from helper import print_arena, filter
+from helper import print_arena, filter, angle
 
 class Colors(enum.Enum):
     GREEN = ([27, 125, 33], [32, 130, 38])  # Goblin
@@ -33,11 +34,25 @@ class Perception:
         self.antidodes = []
         self.spiderman = []
 
+        # Constant parameters used in Aruco methods
+        self.ARUCO_PARAMETERS = aruco.DetectorParameters_create()
+        self.ARUCO_DICT = aruco.Dictionary_get(aruco.DICT_ARUCO_ORIGINAL)
+
+
+        # Create grid board object we're using in our stream
+        self.board = aruco.GridBoard_create(
+                markersX=2,
+                markersY=2,
+                markerLength=0.09,
+                markerSeparation=0.01,
+                dictionary=self.ARUCO_DICT)
+
         # params
         self.y_pad = 44
         self.x_pad = 12
-        self.hex_height = 39
+        self.hex_height = 39.0
         self.hex_width = 22.5
+        self.bot_side = 21.0
 
     def scan_arena(self):
         '''
@@ -140,13 +155,27 @@ class Perception:
         '''
         img = self.env.camera_feed()
         # img = cv2.imread("sample_arena_img.png")
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
-        out = filter(img, Colors.WHITE.value)
-        contours, _ = cv2.findContours(out, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        for contour in contours:
-            approx = cv2.approxPolyDP(contour, 0.02 * cv2.arcLength(contour, True), True).tolist()
-            if len(approx) == 4:
-                return self.contours_to_location([contour])[0]
+        # Detect Aruco markers
+        corners, ids, rejectedImgPoints = aruco.detectMarkers(gray, self.ARUCO_DICT, parameters=self.ARUCO_PARAMETERS)
+
+        if ids is not None:
+            corners = sorted(corners[0][0], key=lambda x: x[1])
+            theta = angle(corners[0], corners[1] if corners[1][0] > corners[0][0] else corners[2])
+            X = sorted([ a[0] for a in corners ])
+            Y = sorted([ a[1] for a in corners ])
+            center_x = int(X[0] + (X[-1] - X[0])/2)
+            center_y = int(Y[0] + (Y[-1] - Y[0])/2)
+
+            return center_x, center_y, theta
+
+        # out = filter(img, Colors.WHITE.value)
+        # contours, _ = cv2.findContours(out, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        # for contour in contours:
+        #     approx = cv2.approxPolyDP(contour, 0.02 * cv2.arcLength(contour, True), True).tolist()
+        #     if len(approx) == 4:
+        #         return self.contours_to_location([contour])[0]
         
         raise Exception("Position Not found")
 
@@ -170,11 +199,12 @@ if __name__ == "__main__":
     os.chdir(parent_path)
     env = gym.make("pixelate_arena-v0")
     perception = Perception(env)
-    perception.scan_arena()
-    env.unlock_antidotes()
-    perception.revel_antidodes()
-    print(perception.arena)
-    print(perception.spiderman, perception.goblin, perception.sandman, perception.electro)
-
+    # perception.scan_arena()
+    # env.unlock_antidotes()
+    # perception.revel_antidodes()
+    # print(perception.arena)
+    # print(perception.spiderman, perception.goblin, perception.sandman, perception.electro)
+    location = perception.get_location()
+    print(location)
     cv2.waitKey(0)
     

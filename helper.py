@@ -1,4 +1,5 @@
 import cv2
+import math
 import numpy as np
 
 def print_arena(arena):
@@ -26,6 +27,15 @@ def filter(image, boundary):
     kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3,3))
     output = cv2.morphologyEx(output, cv2.MORPH_CLOSE, kernel)
     return output
+
+def angle(point1, point2):
+    if point1[1] == point2[1]:
+        return 0.0
+    return math.atan( ( point2[1] - point1[1] ) / ( point2[0] - point1[0] ) )
+
+def dist(point1, point2):
+    d = ( (point1[0] - point2[0])**2 + (point1[1] - point2[1])**2 )**(1/2)
+    return d
 
 if __name__ == "__main__":
     print("These are helper functions")
